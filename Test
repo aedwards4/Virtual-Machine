@@ -1,0 +1,25 @@
+package vm;
+
+import static vm.Bytecode.*;
+
+public class TestMeetup1 {
+
+	//test program
+	static int[] hello = {
+			ICONST, 3,
+			ICONST, 1,
+			IADD,
+			PRINT,
+			HALT
+	};
+	
+	public static void main(String [] args) {
+		int datasize = 1;
+		int mainip = 0;
+		
+		VM vm = new VM(hello, mainip, datasize);
+		
+		vm.trace = true;
+		vm.cpu(); 									//executing
+	}
+}
