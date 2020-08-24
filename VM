@@ -1,0 +1,168 @@
+package vm;
+import static vm.Bytecode.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class VM {
+	
+	int[] data;
+	int[] code;
+	int[] stack;
+	
+	int ip;       //instruction pointer
+	int sp = -1;  //stack pointer, when incremented will start at 0
+	int fp;       //frame pointer
+	
+	boolean trace = false;
+	
+	final int TRUE = 1;
+	final int FALSE = 0; //???
+	
+	//Constructor, requires some code, a starting point, and how much memory is needed
+	public VM( int [] code, int main, int datasize) {
+		this.code = code;
+		this.ip = main;
+		data = new int[datasize];
+		stack = new int[100];
+		
+	}
+	
+	public void cpu() {
+		while (ip<code.length) {	//will stop if run out of instructions or if someone executes HALT
+			int opcode = code[ip];  //fetch
+			
+			if (trace) {
+				//Could extract method disassemble(int opcode)
+				Instruction instr = Bytecode.opcodes[opcode];
+				System.err.printf("%04d: %s",ip,instr.name);
+				
+				if(instr.nOpnds == 1) {
+					System.err.printf(" %d",code[ip+1]);
+				}
+				else if(instr.nOpnds == 2) {
+					System.err.printf(" %d, %d", code[ip+1], code[ip+2]);
+				}
+				
+				//print stack ---- Issue with stack printing correctly......
+				List<Integer> stck = new ArrayList<Integer>();
+				for(int i=0;i<=sp;i++) {
+					stck.add(stack[i]);			//getting the value
+				}
+				System.err.print("\t\t"+stck);
+				System.err.println();
+			}
+			
+			ip++;					//once we fetch the instruction, move immediately to operand or next instruction
+			
+			switch (opcode) {		//depending on the opcode, do something
+				case IADD:
+					int op1 = stack[sp--];		//Pop first operand
+					int op2 = stack[sp--];		//Pop second operand						
+					stack[++sp] = op1 + op2;	//Push result onto stack
+					break;
+				case ISUB:
+					op1 = stack[sp--];
+					op2 = stack[sp--];
+					stack[++sp] = op1 - op2;
+					break;
+				case IMUL:
+					op1 = stack[sp--];
+					op2 = stack[sp--];
+					stack[++sp] = op1 * op2;
+					break;
+				case ILT:
+					op1 = stack[sp--];
+					op2 = stack[sp--];
+					if(op1 < op2) {
+						stack[++sp] = TRUE;
+					}
+					else {
+						stack[++sp] = FALSE;
+					}
+					break;
+				case IEQ:
+					op1 = stack[sp--];
+					op2 = stack[sp--];
+					if(op1 == op2) {
+						stack[++sp] = TRUE;
+					}
+					else {
+						stack[++sp] = FALSE;
+					}
+					break;
+				case BR:
+					ip = code[ip++];
+					break;
+				case BRT:
+					int addr = code[ip++];		//Find out where you're going
+					if(stack[sp--] == TRUE) {	//Check condition
+						ip = addr;				//If condition is met, branch
+					}
+					break;
+				case BRF:
+					addr = code[ip++];			//Find out where you're going
+					if(stack[sp--] == FALSE) {	//Check condition
+						ip = addr;				//If condition is met, branch
+					}
+					break;
+				case ICONST:
+					int v = code[ip]; 			//Take it from code memory and put it on stack
+					ip++;
+					sp++;
+					stack[sp] = v;
+					break;
+				case LOAD:
+					int offset = code[ip++];		//Get offset from code memory
+					stack[++sp] = stack[fp+offset]; //Push value onto stack
+					break;
+				case GLOAD:
+					addr = code[ip];
+					ip++;
+					v = data[addr];			//Get value from global memory
+					sp++;					//Increment stack pointer
+					stack[sp] = v;			//Push value on top of the stack
+					break;
+				case STORE:
+					offset = code[ip++];
+					stack[fp+offset] = stack[sp--];
+					break;
+				case GSTORE:
+					v = stack[sp];			//Pop value from top of the stack
+					sp--;					//Decrement stack pointer
+					addr = code[ip];
+					ip++;
+					data[addr] = v;			//store value in global data
+					break;
+				case PRINT:
+					v = stack[sp];			//Take what is on top of the stack
+					sp--;					//Decrement the stack pointer
+					System.out.println(v+"\n");
+					break;
+				case POP:
+					--sp;
+					break;
+				case CALL:
+					addr = code[ip++];		//target address of function
+					int nargs = code[ip++];	//number of args pushed
+					stack[++sp] = nargs;	//save number of args
+					stack[++sp] = fp;		//save frame pointer
+					stack[++sp] = ip;		//push return address
+					fp = sp;				//fp points to return address on stack
+					ip = addr;				//jump to function
+					break;
+				case RET:
+					int rvalue = stack[sp--];	//pop return value
+					sp = fp;					//jump over locals to fp
+					ip = stack[sp--];			//pop return address
+					fp = stack[sp--];			//restore frame pointer
+					nargs = stack[sp--];		//how many args to throw away
+					sp -= nargs;				//pop args
+					stack[++sp] = rvalue;		//push result onto stack
+					break;
+				case HALT :
+					return;
+			}
+		}
+	}
+}
